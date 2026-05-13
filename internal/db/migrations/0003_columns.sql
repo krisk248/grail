@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS col (
+    id         TEXT PRIMARY KEY,
+    name       TEXT NOT NULL,
+    sort       INTEGER NOT NULL DEFAULT 0,
+    deleted_at INTEGER NOT NULL DEFAULT 0
+);
+
+ALTER TABLE application ADD COLUMN col_id TEXT NOT NULL DEFAULT '';

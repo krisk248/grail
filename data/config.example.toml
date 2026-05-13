@@ -1,0 +1,137 @@
+# grail config — TOML is the source of truth.
+# Edit this file and the dashboard reloads automatically (~300 ms).
+# Every column / application / service / url needs a stable, unique `id`.
+
+[site]
+title  = "Kannan Test TTS"
+footer = "Kannan Test TTS · Internal Tools · contact@example.com"
+
+# ----- Columns (top-level groupings, rendered side-by-side) -----
+# The number of columns is implicit — add or remove [[column]] blocks as you like.
+[[column]]
+id   = "search"
+name = "Search"
+
+[[column]]
+id   = "social"
+name = "Social"
+
+[[column]]
+id   = "uae"
+name = "UAE"
+
+# ===================== SEARCH =====================
+[[application]]
+column = "search"
+id     = "google"
+name   = "Google"
+icon   = "search"
+
+  # URLs grouped under services (each service becomes a sub-heading on the card).
+  [[application.service]]
+  id   = "google-workspace"
+  name = "Workspace"
+
+    [[application.service.url]]
+    id   = "gmail"
+    name = "Gmail"
+    url  = "https://mail.google.com"
+
+    [[application.service.url]]
+    id   = "drive"
+    name = "Drive"
+    url  = "https://drive.google.com"
+
+  [[application.service]]
+  id   = "google-media"
+  name = "Media"
+
+    [[application.service.url]]
+    id   = "youtube"
+    name = "YouTube"
+    url  = "https://www.youtube.com"
+
+    [[application.service.url]]
+    id   = "google-images"
+    name = "Images"
+    url  = "https://images.google.com"
+
+[[application]]
+column = "search"
+id     = "yahoo"
+name   = "Yahoo"
+
+  # Skip services entirely — put URLs directly on the application.
+  [[application.url]]
+  id   = "yahoo-search"
+  name = "Search"
+  url  = "https://search.yahoo.com"
+
+  [[application.url]]
+  id   = "yahoo-news"
+  name = "News"
+  url  = "https://news.yahoo.com"
+
+# ===================== SOCIAL =====================
+[[application]]
+column = "social"
+id     = "github"
+name   = "GitHub"
+
+  [[application.url]]
+  id   = "github-web"
+  name = "Web"
+  url  = "https://github.com"
+
+[[application]]
+column = "social"
+id     = "ai-tools"
+name   = "AI"
+
+  [[application.url]]
+  id   = "gemini"
+  name = "Gemini"
+  url  = "https://gemini.google.com"
+
+  [[application.url]]
+  id   = "claude"
+  name = "Claude"
+  url  = "https://claude.ai"
+
+# ===================== UAE =====================
+[[application]]
+column = "uae"
+id     = "adx"
+name   = "ADX"
+
+  [[application.url]]
+  id   = "adx-main"
+  name = "Main"
+  url  = "https://www.adx.ae"
+
+  [[application.url]]
+  id   = "adx-trading"
+  name = "Trading"
+  url  = "https://trading.adx.ae"
+
+[[application]]
+column = "uae"
+id     = "mock-ipo"
+name   = "Mock IPO"
+
+  [[application.url]]
+  id   = "mock-ipo-test"
+  name = "Test"
+  url  = "https://example.com"
+
+[[application]]
+column = "uae"
+id     = "grafana"
+name   = "Grafana"
+
+  # `alt` adds a second clickable URL on the same card (e.g. http counterpart).
+  [[application.url]]
+  id   = "grafana-local"
+  name = "Local"
+  url  = "https://grafana.local:3000"
+  alt  = "http://grafana.local:3000"

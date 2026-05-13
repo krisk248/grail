@@ -1,0 +1,34 @@
+/grail
+/data/*
+!/data/.gitkeep
+!/data/config.example.toml
+
+# Company-specific data is kept local (contains internal hostnames/IPs/ports).
+# Move into a private companion repo or store outside this directory if needed.
+/data/config.golden.toml
+/TTSME_URL_Routing*.csv
+/TTSME_URL_Routing*.xlsx
+
+/web/node_modules
+/web/.svelte-kit
+/web/build
+/internal/web/build/*
+!/internal/web/build/.gitkeep
+
+*.db
+*.db-wal
+*.db-shm
+
+.env
+!.env.example
+.DS_Store
+
+# Tooling caches that aren't part of the project
+/.serena/
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# Build artefact at repo root (from `go build`)
+/grail

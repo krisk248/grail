@@ -1,0 +1,13 @@
+.git
+.gitignore
+data/
+*.db
+*.db-wal
+*.db-shm
+web/node_modules
+web/.svelte-kit
+web/build
+internal/web/build/*
+!internal/web/build/.gitkeep
+README.md
+*.md

@@ -1,0 +1,35 @@
+# grail — homelab dashboard + URL index.
+#
+# Deploy (any machine — QA, office, server):
+#     git clone https://github.com/krisk248/grail
+#     cd grail && cp .env.example .env       # edit .env if you want non-defaults
+#     docker compose up -d                   # pulls ghcr.io/krisk248/grail:latest
+#
+# Local development (when changing code):
+#     make build                             # builds frontend + go binary + image
+#     docker compose up -d                   # uses the freshly built local image
+#
+# Pull a fresh image without touching code:
+#     docker compose pull && docker compose up -d
+#
+# Analytics (Umami) is optional — leave UMAMI_SCRIPT_URL/UMAMI_WEBSITE_ID empty
+# in .env to disable. Fill in (with a browser-reachable URL + a website-id from
+# any running Umami instance) and `docker compose up -d` to inject the
+# tracking snippet. No image rebuild needed.
+
+services:
+  grail:
+    image: ghcr.io/krisk248/grail:${GRAIL_TAG:-latest}
+    container_name: grail
+    restart: unless-stopped
+    pull_policy: missing
+    ports:
+      - "${GRAIL_HOST_PORT:-6093}:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      ADMIN_PASSWORD:       ${ADMIN_PASSWORD:-changeme}
+      INSECURE_SKIP_VERIFY: "${INSECURE_SKIP_VERIFY:-true}"
+      # Optional Umami analytics — both must be set for the script to inject.
+      UMAMI_SCRIPT_URL:     ${UMAMI_SCRIPT_URL:-}
+      UMAMI_WEBSITE_ID:     ${UMAMI_WEBSITE_ID:-}
