@@ -50,23 +50,7 @@ func loggerMW(log *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 			srw := &statusRW{ResponseWriter: w, code: 200}
 			next.ServeHTTP(srw, r)
-			// 5xx→Error, 4xx→Warn, state-changing→Info, routine 2xx GETs→Debug
-			// (so the every-10s /api/state polling and static assets stay quiet
-			// unless LOG_LEVEL=debug).
-			lvl := slog.LevelInfo
-			switch {
-			case srw.code >= 500:
-				lvl = slog.LevelError
-			case srw.code >= 400:
-				lvl = slog.LevelWarn
-			case r.Method == http.MethodGet || r.Method == http.MethodHead:
-				lvl = slog.LevelDebug
-			}
-			log.LogAttrs(r.Context(), lvl, "http",
-				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
-				slog.Int("status", srw.code),
-				slog.Int64("ms", time.Since(start).Milliseconds()))
+			log.Info("http", "method", r.Method, "path", r.URL.Path, "status", srw.code, "ms", time.Since(start).Milliseconds())
 		})
 	}
 }
