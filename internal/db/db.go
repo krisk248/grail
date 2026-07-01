@@ -265,10 +265,6 @@ func PruneHistory(ctx context.Context, d *sql.DB, keepPerURL int) error {
 }
 
 func PruneSessions(ctx context.Context, d *sql.DB) error {
-	now := time.Now().Unix()
-	if _, err := d.ExecContext(ctx, `DELETE FROM session WHERE expires_at < ?`, now); err != nil {
-		return err
-	}
-	_, err := d.ExecContext(ctx, `DELETE FROM gate_session WHERE expires_at < ?`, now)
+	_, err := d.ExecContext(ctx, `DELETE FROM session WHERE expires_at < ?`, time.Now().Unix())
 	return err
 }

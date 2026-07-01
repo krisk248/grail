@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -23,55 +22,25 @@ import (
 )
 
 type Server struct {
-	DB             *sql.DB
-	Log            *slog.Logger
-	Checker        *checker.Supervisor
-	Sessions       *session.Manager
-	ConfigPath     string
-	AdminPassHash  []byte
-	ViewerPassHash []byte
-	StaticFS       fs.FS
-	Current        *atomic.Pointer[config.Config]
-	TrustedProxies []*net.IPNet
-	UmamiScriptURL string
-	SecureCookies  bool
-	csp            string
-	loginLimiter   *loginLimiter
-	gateLimiter    *strikeLimiter
-	OnConfigSaved  func()
+	DB            *sql.DB
+	Log           *slog.Logger
+	Checker       *checker.Supervisor
+	Sessions      *session.Manager
+	ConfigPath    string
+	AdminPassHash []byte
+	StaticFS      fs.FS
+	Current       *atomic.Pointer[config.Config]
+	loginLimiter  *loginLimiter
+	OnConfigSaved func()
 }
 
-// Config carries the tunables NewServer needs beyond its core dependencies.
-type Options struct {
-	AdminHash      []byte
-	ViewerHash     []byte
-	TrustedProxies []*net.IPNet
-	UmamiScriptURL string
-	SecureCookies  bool
-}
-
-func NewServer(d *sql.DB, log *slog.Logger, c *checker.Supervisor, sm *session.Manager, cfgPath string, staticFS fs.FS, current *atomic.Pointer[config.Config], opts Options, onSaved func()) *Server {
-	// Hash-allowlist the inline scripts we actually ship (SvelteKit bootstrap in
-	// index.html + the gate page) so the CSP can stay strict without
-	// 'unsafe-inline'. Computed from the exact bytes served.
-	hashes := inlineScriptHashes(gatePageHTML)
-	if b, err := fs.ReadFile(staticFS, "index.html"); err == nil {
-		hashes = append(hashes, inlineScriptHashes(string(b))...)
-	}
-	csp := buildCSP(cspSourceFromURL(opts.UmamiScriptURL), hashes)
-
+func NewServer(d *sql.DB, log *slog.Logger, c *checker.Supervisor, sm *session.Manager, cfgPath string, adminHash []byte, staticFS fs.FS, current *atomic.Pointer[config.Config], onSaved func()) *Server {
 	return &Server{
 		DB: d, Log: log, Checker: c, Sessions: sm,
-		ConfigPath: cfgPath, AdminPassHash: opts.AdminHash, ViewerPassHash: opts.ViewerHash,
-		StaticFS:       staticFS,
-		Current:        current,
-		TrustedProxies: opts.TrustedProxies,
-		UmamiScriptURL: opts.UmamiScriptURL,
-		SecureCookies:  opts.SecureCookies,
-		csp:            csp,
-		loginLimiter:   newLoginLimiter(),
-		gateLimiter:    newStrikeLimiter(3, 15*time.Minute),
-		OnConfigSaved:  onSaved,
+		ConfigPath: cfgPath, AdminPassHash: adminHash, StaticFS: staticFS,
+		Current:       current,
+		loginLimiter:  newLoginLimiter(),
+		OnConfigSaved: onSaved,
 	}
 }
 
@@ -83,14 +52,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/state", s.getState)
 	mux.HandleFunc("GET /api/url/{id}/history", s.getURLHistory)
 
-	// Viewer gate (site-wide password wall)
-	mux.HandleFunc("POST /gate/login", s.postGateLogin)
-
 	// Admin API
 	mux.HandleFunc("POST /api/url/{id}/check-now", s.requireAuth(s.postCheckNow))
 	mux.HandleFunc("POST /admin/login", s.postLogin)
 	mux.HandleFunc("POST /admin/logout", s.postLogout)
-	mux.HandleFunc("POST /admin/logout-all", s.requireAuth(s.postLogoutAll))
 	mux.HandleFunc("GET /admin/api/me", s.getMe)
 	mux.HandleFunc("GET /admin/api/config", s.requireAuth(s.getConfig))
 	mux.HandleFunc("POST /admin/api/config", s.requireAuth(s.postConfig))
@@ -98,13 +63,7 @@ func (s *Server) Handler() http.Handler {
 	// SPA fallback: everything else serves the embedded SvelteKit static build.
 	mux.HandleFunc("/", s.serveSPA)
 
-	// gateMW is innermost so its 401 page still gets security headers + logging.
-	return chain(mux,
-		recoverMW(s.Log),
-		loggerMW(s.Log),
-		securityHeadersMW(s.csp, s.SecureCookies),
-		s.gateMW,
-	)
+	return chain(mux, recoverMW(s.Log), loggerMW(s.Log))
 }
 
 // ---------------- helpers ----------------
@@ -330,7 +289,7 @@ type loginReq struct {
 }
 
 func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
-	ip := clientIP(r, s.TrustedProxies)
+	ip := clientIP(r)
 	if !s.loginLimiter.allow(ip) {
 		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
 		return
@@ -343,33 +302,18 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	if err := bcrypt.CompareHashAndPassword(s.AdminPassHash, []byte(req.Password)); err != nil {
 		// constant-ish failure delay to make spraying obvious
 		time.Sleep(250 * time.Millisecond)
-		s.Log.Warn("admin login failed", "ip", ip)
 		writeErr(w, http.StatusUnauthorized, "invalid password")
 		return
 	}
-	// Rotate: drop any prior session for this browser before minting a new one.
-	s.Sessions.Destroy(r.Context(), w, r)
 	if _, err := s.Sessions.Create(r.Context(), w); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	s.Log.Info("admin login ok", "ip", ip)
 	writeJSON(w, 200, map[string]string{"status": "ok"})
 }
 
 func (s *Server) postLogout(w http.ResponseWriter, r *http.Request) {
 	s.Sessions.Destroy(r.Context(), w, r)
-	writeJSON(w, 200, map[string]string{"status": "ok"})
-}
-
-// postLogoutAll invalidates every admin session (log out everywhere).
-func (s *Server) postLogoutAll(w http.ResponseWriter, r *http.Request) {
-	if err := s.Sessions.DestroyAll(r.Context()); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	s.Sessions.Destroy(r.Context(), w, r)
-	s.Log.Info("admin logout-all", "ip", clientIP(r, s.TrustedProxies))
 	writeJSON(w, 200, map[string]string{"status": "ok"})
 }
 

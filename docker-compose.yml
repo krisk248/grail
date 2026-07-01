@@ -28,18 +28,8 @@ services:
     volumes:
       - ./data:/data
     environment:
-      # Admin (config editing). The container refuses to start if this is unset
-      # or left as the literal placeholder 'changeme'.
-      ADMIN_PASSWORD:       ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
-      # Viewer gate — the site-wide password wall. Defaults to a built-in value
-      # if unset; override per deployment.
-      VIEWER_PASSWORD:      ${VIEWER_PASSWORD:-}
-      # Mark cookies Secure (set true when served over HTTPS behind a proxy).
-      SECURE_COOKIES:       "${SECURE_COOKIES:-false}"
-      # Trusted reverse-proxy CIDRs whose X-Forwarded-For is honored. Leave empty
-      # if grail is exposed directly. Docker bridge default is 172.16.0.0/12.
-      TRUSTED_PROXIES:      "${TRUSTED_PROXIES:-}"
-      INSECURE_SKIP_VERIFY: "${INSECURE_SKIP_VERIFY:-false}"
+      ADMIN_PASSWORD:       ${ADMIN_PASSWORD:-changeme}
+      INSECURE_SKIP_VERIFY: "${INSECURE_SKIP_VERIFY:-true}"
       # Optional Umami analytics — both must be set for the script to inject.
       UMAMI_SCRIPT_URL:     ${UMAMI_SCRIPT_URL:-}
       UMAMI_WEBSITE_ID:     ${UMAMI_WEBSITE_ID:-}
