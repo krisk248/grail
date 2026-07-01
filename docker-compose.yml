@@ -40,6 +40,9 @@ services:
       # if grail is exposed directly. Docker bridge default is 172.16.0.0/12.
       TRUSTED_PROXIES:      "${TRUSTED_PROXIES:-}"
       INSECURE_SKIP_VERIFY: "${INSECURE_SKIP_VERIFY:-false}"
+      # Log verbosity: debug | info | warn | error. Default info logs check
+      # up/down transitions + POSTs + errors; debug adds every request.
+      LOG_LEVEL:            "${LOG_LEVEL:-info}"
       # Optional Umami analytics — both must be set for the script to inject.
       UMAMI_SCRIPT_URL:     ${UMAMI_SCRIPT_URL:-}
       UMAMI_WEBSITE_ID:     ${UMAMI_WEBSITE_ID:-}

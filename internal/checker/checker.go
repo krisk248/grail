@@ -23,6 +23,9 @@ type Supervisor struct {
 
 	mu      sync.Mutex
 	workers map[string]*worker
+
+	lastMu sync.Mutex
+	lastOK map[string]bool // url_id -> last observed up/down, for transition logging
 }
 
 type worker struct {
@@ -54,6 +57,7 @@ func New(d *sql.DB, log *slog.Logger, insecureSkipVerify bool) *Supervisor {
 		log:     log,
 		client:  c,
 		workers: make(map[string]*worker),
+		lastOK:  make(map[string]bool),
 	}
 }
 
@@ -139,23 +143,36 @@ func (s *Supervisor) do(ctx context.Context, urlID, target string) {
 	start := time.Now()
 	req, err := http.NewRequestWithContext(ctx, "GET", target, nil)
 	if err != nil {
-		s.record(urlID, false, 0, time.Since(start), err.Error())
+		s.record(urlID, target, false, 0, time.Since(start), err.Error())
 		return
 	}
 	req.Header.Set("User-Agent", "grail/1.0 (uptime-check)")
 	resp, err := s.client.Do(req)
 	latency := time.Since(start)
 	if err != nil {
-		s.record(urlID, false, 0, latency, err.Error())
+		s.record(urlID, target, false, 0, latency, err.Error())
 		return
 	}
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 	resp.Body.Close()
 	ok := resp.StatusCode >= 200 && resp.StatusCode < 400
-	s.record(urlID, ok, resp.StatusCode, latency, "")
+	s.record(urlID, target, ok, resp.StatusCode, latency, "")
 }
 
-func (s *Supervisor) record(urlID string, ok bool, code int, latency time.Duration, errStr string) {
+func (s *Supervisor) record(urlID, target string, ok bool, code int, latency time.Duration, errStr string) {
+	// Log only state transitions (up<->down) so the reason a URL is down is
+	// visible in the logs without spamming a line every interval.
+	s.lastMu.Lock()
+	prev, had := s.lastOK[urlID]
+	s.lastOK[urlID] = ok
+	s.lastMu.Unlock()
+	switch {
+	case !ok && (!had || prev):
+		s.log.Warn("check down", "url_id", urlID, "url", target, "status", code, "err", errStr)
+	case ok && had && !prev:
+		s.log.Info("check recovered", "url_id", urlID, "url", target, "status", code, "latency_ms", latency.Milliseconds())
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := db.InsertCheck(ctx, s.db, db.Check{
