@@ -32,3 +32,6 @@
 
 # Build artefact at repo root (from `go build`)
 /grail
+
+# Local project state / session snapshot — not for the public repo
+/CONTEXT.md

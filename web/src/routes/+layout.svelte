@@ -37,20 +37,42 @@
   onMount(loadSite);
 </script>
 
-<header class="topbar">
-  <a class="brand" href="/">
-    <span class="logo">●</span>
-    <span>{title || ' '}</span>
-  </a>
-  <nav>
-    <a href="/admin">admin</a>
-  </nav>
-</header>
+<div class="enter-flash" aria-hidden="true"></div>
+<div class="app-enter">
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="logo">●</span>
+      <span>{title || ' '}</span>
+    </a>
+    <nav>
+      <a href="/admin">admin</a>
+    </nav>
+  </header>
 
-<main class:full={isAdmin}>
-  {@render children?.()}
-</main>
+  <main class:full={isAdmin}>
+    {@render children?.()}
+  </main>
 
-{#if !isAdmin && footer}
-  <footer class="page-footer">{footer}</footer>
-{/if}
+  {#if !isAdmin && footer}
+    <footer class="page-footer">{footer}</footer>
+  {/if}
+</div>
+
+<style>
+  /* Classy arrival from the gateway — CSS-only (opacity), most efficient. */
+  .app-enter{animation:appEnter .6s ease both}
+  @keyframes appEnter{from{opacity:0}to{opacity:1}}
+
+  /* Teal flash that dissipates, matching the gate's warp-out. */
+  .enter-flash{
+    position:fixed;inset:0;z-index:90;pointer-events:none;
+    background:radial-gradient(circle at 50% 42%,rgba(210,255,247,.55),rgba(94,234,212,.22) 30%,transparent 62%);
+    animation:flashOut .85s ease forwards;
+  }
+  @keyframes flashOut{from{opacity:1}to{opacity:0}}
+
+  @media (prefers-reduced-motion: reduce){
+    .app-enter{animation:none}
+    .enter-flash{display:none}
+  }
+</style>

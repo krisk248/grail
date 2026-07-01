@@ -14,6 +14,7 @@ import (
 const (
 	CookieName     = "grail_session"
 	CSRFCookieName = "grail_csrf"
+	GateCookieName = "grail_gate"
 	CSRFHeader     = "X-CSRF-Token"
 	ttl            = 7 * 24 * time.Hour
 )
@@ -76,6 +77,12 @@ func (m *Manager) Validate(ctx context.Context, r *http.Request) bool {
 	return exp >= time.Now().Unix()
 }
 
+// DestroyAll deletes every admin session (log out everywhere).
+func (m *Manager) DestroyAll(ctx context.Context) error {
+	_, err := m.db.ExecContext(ctx, `DELETE FROM session`)
+	return err
+}
+
 // Destroy deletes the session from DB and clears the cookies.
 func (m *Manager) Destroy(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(CookieName); err == nil && c.Value != "" {
@@ -84,6 +91,49 @@ func (m *Manager) Destroy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	expire := time.Unix(0, 0)
 	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", Expires: expire, MaxAge: -1, HttpOnly: true, Secure: m.secure, SameSite: http.SameSiteLaxMode})
 	http.SetCookie(w, &http.Cookie{Name: CSRFCookieName, Value: "", Path: "/", Expires: expire, MaxAge: -1, Secure: m.secure, SameSite: http.SameSiteLaxMode})
+}
+
+// ---------------- viewer gate sessions ----------------
+
+// GateCreate issues a new viewer-gate session and sets its cookie.
+func (m *Manager) GateCreate(ctx context.Context, w http.ResponseWriter) error {
+	tok := randomToken()
+	exp := time.Now().Add(ttl)
+	if _, err := m.db.ExecContext(ctx, `INSERT INTO gate_session (token, expires_at) VALUES (?, ?)`, tok, exp.Unix()); err != nil {
+		return err
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     GateCookieName,
+		Value:    tok,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   m.secure,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  exp,
+	})
+	return nil
+}
+
+// GateValidate returns true if the request carries a valid gate cookie.
+func (m *Manager) GateValidate(ctx context.Context, r *http.Request) bool {
+	c, err := r.Cookie(GateCookieName)
+	if err != nil || c.Value == "" {
+		return false
+	}
+	var exp int64
+	row := m.db.QueryRowContext(ctx, `SELECT expires_at FROM gate_session WHERE token = ?`, c.Value)
+	if err := row.Scan(&exp); err != nil {
+		return false
+	}
+	return exp >= time.Now().Unix()
+}
+
+// GateDestroy deletes the gate session and clears its cookie.
+func (m *Manager) GateDestroy(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(GateCookieName); err == nil && c.Value != "" {
+		_, _ = m.db.ExecContext(ctx, `DELETE FROM gate_session WHERE token = ?`, c.Value)
+	}
+	http.SetCookie(w, &http.Cookie{Name: GateCookieName, Value: "", Path: "/", Expires: time.Unix(0, 0), MaxAge: -1, HttpOnly: true, Secure: m.secure, SameSite: http.SameSiteLaxMode})
 }
 
 // CheckCSRF validates that the X-CSRF-Token header matches the CSRF cookie.

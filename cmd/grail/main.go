@@ -179,8 +179,16 @@ func main() {
 		log.Error("ADMIN_PASSWORD env var is required")
 		os.Exit(1)
 	}
+	if strings.EqualFold(pass, "changeme") {
+		log.Error("ADMIN_PASSWORD is still the placeholder 'changeme' — set a real password")
+		os.Exit(1)
+	}
+	// Viewer gate password (site-wide password wall). Defaults so the box works
+	// out of the box; override VIEWER_PASSWORD per deployment.
+	viewerPass := env("VIEWER_PASSWORD", "T0talt3ch25#")
 	secureCookies := strings.EqualFold(os.Getenv("SECURE_COOKIES"), "true")
 	insecureSkipVerify := strings.EqualFold(os.Getenv("INSECURE_SKIP_VERIFY"), "true")
+	trustedProxies := grailhttp.ParseTrustedProxies(os.Getenv("TRUSTED_PROXIES"))
 
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		log.Error("mkdir data dir", "err", err)
@@ -218,10 +226,15 @@ func main() {
 	chk := checker.New(d, log, insecureSkipVerify)
 	defer chk.StopAll()
 
-	// Hash admin password once at boot.
+	// Hash passwords once at boot.
 	hash, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
 	if err != nil {
 		log.Error("hash password", "err", err)
+		os.Exit(1)
+	}
+	viewerHash, err := bcrypt.GenerateFromPassword([]byte(viewerPass), bcrypt.DefaultCost)
+	if err != nil {
+		log.Error("hash viewer password", "err", err)
 		os.Exit(1)
 	}
 	sm := session.New(d, secureCookies)
@@ -255,7 +268,13 @@ func main() {
 
 	go chk.PruneLoop(rootCtx, 100, 1*time.Hour)
 
-	srv := grailhttp.NewServer(d, log, chk, sm, cfgPath, hash, web.Dist(), &current, func() {
+	srv := grailhttp.NewServer(d, log, chk, sm, cfgPath, web.Dist(), &current, grailhttp.Options{
+		AdminHash:      hash,
+		ViewerHash:     viewerHash,
+		TrustedProxies: trustedProxies,
+		UmamiScriptURL: os.Getenv("UMAMI_SCRIPT_URL"),
+		SecureCookies:  secureCookies,
+	}, func() {
 		// On admin save, the fsnotify watcher will fire too — this is a fast-path nudge.
 		if c, err := config.Load(cfgPath); err == nil {
 			apply(c)

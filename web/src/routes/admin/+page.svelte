@@ -65,6 +65,12 @@
     toml = '';
   }
 
+  async function logoutAll() {
+    await fetch('/admin/logout-all', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken() } });
+    authed = false;
+    toml = '';
+  }
+
   async function save() {
     saveErr = '';
     saveOk = '';
@@ -138,6 +144,7 @@
       </div>
       <div class="actions">
         <a class="ghost-link" href="/"><button class="ghost">Dashboard</button></a>
+        <button class="ghost" on:click={logoutAll} title="Invalidate all admin sessions everywhere">Sign out all</button>
         <button class="ghost" on:click={logout}>Sign out</button>
         <button class="primary" on:click={save} disabled={busy}>Save</button>
       </div>
